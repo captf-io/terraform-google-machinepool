@@ -1,0 +1,72 @@
+#!/bin/sh
+# Written by the CAPTF gcp-machinepool module as the first part of the pool's
+# user-data: registers the MachinePool's labels with the kubelet. The rest is
+# the shared fragment, verbatim.
+set -eu
+# shellcheck shell=sh
+# CAPTF node labels (CONVENTIONS.md section 13), shared by every machine
+# pool module; embed it verbatim. Input: node_labels, the labels the kubelet
+# may set on itself, sorted and comma-joined ("k=v,k=v"; empty for none).
+# Pool instances have no Machine, so nothing else puts the labels on their
+# Nodes. POSIX sh. Safe to run on every boot: the block it adds is dropped
+# first, and the image's own KUBELET_EXTRA_ARGS line is never edited, so a
+# second run yields the same file.
+captf_node_labels='${node_labels}'
+# kubeadm's kubelet drop-in reads KUBELET_EXTRA_ARGS from /etc/default/kubelet
+# (deb) or /etc/sysconfig/kubelet (rpm); the last assignment wins.
+for captf_env_file in /etc/default/kubelet /etc/sysconfig/kubelet; do
+  [ -d "$${captf_env_file%/*}" ] || continue
+  captf_tmp="$captf_env_file.captf-tmp"
+  if [ -f "$captf_env_file" ]; then
+    sed '/^# captf-node-labels begin$/,/^# captf-node-labels end$/d' "$captf_env_file" >"$captf_tmp"
+  else
+    : >"$captf_tmp"
+  fi
+  if [ -n "$captf_node_labels" ]; then
+    # The image's value, outside the block, without one level of quotes.
+    captf_args=$(sed -n 's/^KUBELET_EXTRA_ARGS=//p' "$captf_tmp" | tail -n 1)
+    case $captf_args in
+      \"*\")
+        captf_args=$${captf_args#\"}
+        captf_args=$${captf_args%\"}
+        ;;
+      \'*\')
+        captf_args=$${captf_args#\'}
+        captf_args=$${captf_args%\'}
+        ;;
+    esac
+    {
+      printf '# captf-node-labels begin\n'
+      printf 'KUBELET_EXTRA_ARGS="%s--node-labels=%s"\n' "$${captf_args:+$captf_args }" "$captf_node_labels"
+      printf '# captf-node-labels end\n'
+    } >>"$captf_tmp"
+  fi
+  # Nothing to write and nothing there before: create no file.
+  if [ ! -e "$captf_env_file" ] && [ ! -s "$captf_tmp" ]; then
+    rm -f "$captf_tmp"
+    continue
+  fi
+  chmod 0644 "$captf_tmp"
+  mv "$captf_tmp" "$captf_env_file"
+done
+# RKE2 merges config.yaml.d files into its config; "+" appends to the labels
+# the bootstrap configuration sets
+# (https://docs.rke2.io/install/configuration#multiple-config-files).
+captf_rke2_file=/etc/rancher/rke2/config.yaml.d/50-captf-node-labels.yaml
+if [ -n "$captf_node_labels" ]; then
+  mkdir -p "$${captf_rke2_file%/*}"
+  {
+    printf 'node-label+:\n'
+    (
+      set -f
+      IFS=,
+      for captf_label in $captf_node_labels; do
+        printf '  - "%s"\n' "$captf_label"
+      done
+    )
+  } >"$captf_rke2_file.captf-tmp"
+  chmod 0644 "$captf_rke2_file.captf-tmp"
+  mv "$captf_rke2_file.captf-tmp" "$captf_rke2_file"
+else
+  rm -f "$captf_rke2_file"
+fi

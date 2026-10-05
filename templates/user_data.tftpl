@@ -1,0 +1,17 @@
+Content-Type: multipart/mixed; boundary="${boundary}"
+MIME-Version: 1.0
+
+--${boundary}
+Content-Type: text/cloud-boothook; charset="us-ascii"
+MIME-Version: 1.0
+Content-Disposition: attachment; filename="captf-node-labels.sh"
+
+${boothook}
+--${boundary}
+Content-Type: ${payload_content_type}
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="bootstrap"
+
+${payload_base64}
+--${boundary}--
