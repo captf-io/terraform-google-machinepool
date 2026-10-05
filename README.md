@@ -11,6 +11,34 @@ autoscaler. Image: `ghcr.io/captf-io/gcp-machinepool`. Used by a
 `TerraformMachinePool`; contract:
 <https://captf.io/docs/module-author/contract/v1alpha1/machinepool.html>.
 
+## Usage
+
+CAPTF runs this module from the module image `ghcr.io/captf-io/gcp-machinepool`: set the image on
+a `TerraformMachinePool`'s `spec.source.image`, and the controller renders every
+input. The module is also published to the Terraform Registry as
+`captf-io/machinepool/google` and can be called directly:
+
+```hcl
+module "machinepool" {
+  source  = "captf-io/machinepool/google"
+  version = "~> 0.1"
+
+  # The contract inputs the controller would render (captf_contract,
+  # captf_cluster, captf_object, captf_tags, ...; see Inputs), and any
+  # user variables.
+}
+```
+
+Called directly, the module is a CAPTF root module first:
+
+- it configures its own `provider "google"` block, so the calling
+  module cannot use `count`, `for_each` or `depends_on` on it, and the
+  provider takes its credentials from the environment (see Identity
+  Secret);
+- its providers are pinned to exact versions (`versions.tf`), which the
+  calling configuration has to accept;
+- you set the `captf_*` inputs yourself.
+
 ## What it creates
 
 | Resource | Type | When |
@@ -96,7 +124,7 @@ Reads the cluster's `captf.io/gcp-cluster/v1` exports (see
 ## Identity Secret
 
 The same Secret as the cluster role; see
-[examples/identity.yaml](examples/identity.yaml).
+[examples/identity.yaml](https://github.com/captf-io/terraform-google-machinepool/blob/main/examples/identity.yaml).
 
 ## Lifecycle
 
@@ -216,12 +244,12 @@ not a member.
   size by hand and needs `max = 0` for an empty pool, which the autoscaler
   API does not document. The allowance is in this repository's
   `Makefile` (`TFCAPI_LINT_ALLOW`); the reason is also in
-  [DESIGN.md](DESIGN.md) decision 5.
+  [DESIGN.md](https://github.com/captf-io/terraform-google-machinepool/blob/main/DESIGN.md) decision 5.
 
 ## Examples
 
 A MachinePool's TerraformMachinePool with this image (from
-[examples/cluster-kubeadm.yaml](examples/cluster-kubeadm.yaml)):
+[examples/cluster-kubeadm.yaml](https://github.com/captf-io/terraform-google-machinepool/blob/main/examples/cluster-kubeadm.yaml)):
 
 ```yaml
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
